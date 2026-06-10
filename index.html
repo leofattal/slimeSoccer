@@ -795,6 +795,20 @@ function drawSlime(s){
       px += pw + gap;
     }
   }
+
+  // name label so you can tell the slimes apart
+  let lbl;
+  if(mode==='1p') lbl = s.isPlayer ? 'YOU' : 'CPU';
+  else {
+    lbl = s.isPlayer ? 'P1' : 'P2';
+    if(mode==='online' && ((s.isPlayer && netRole==='host') || (!s.isPlayer && netRole==='guest'))) lbl += ' (you)';
+  }
+  ctx.save();
+  ctx.font = 'bold 14px ' + getCSS('--font');
+  ctx.textAlign = 'center';
+  ctx.fillStyle = s.isPlayer ? equippedColor().color : s.color;
+  ctx.fillText(lbl, s.x, s.y - s.r - (human ? 30 : 14));
+  ctx.restore();
 }
 
 /* hats are drawn relative to the top of the dome at (cx, topY) */
@@ -1358,6 +1372,7 @@ function sendSnapshot(){
     cx:cpu.x,    cy:cpu.y,    cr:cpu.r,    cc:cpu.charge,    cs:cpu.superReady?1:0,    ca:cpu.superArmed?1:0,
     bx:ball.x,   by:ball.y,   ba:ball.angle, br:ball.r, bf:ball.flameT,
     y:scoreYou,  o:scoreCpu,  d:cheats.disco?1:0, k:shake,
+    pv:player.invisible?1:0, cv:cpu.invisible?1:0,
   });
 }
 function applySnapshot(d){
@@ -1366,6 +1381,7 @@ function applySnapshot(d){
   cpu.x=d.cx;    cpu.y=d.cy;    cpu.r=d.cr;    cpu.charge=d.cc;    cpu.superReady=!!d.cs;    cpu.superArmed=!!d.ca;
   ball.x=d.bx;   ball.y=d.by;   ball.angle=d.ba; ball.r=d.br; ball.flameT=d.bf;
   scoreYou=d.y;  scoreCpu=d.o;  cheats.disco=!!d.d; shake=Math.max(shake,d.k||0);
+  player.invisible=!!d.pv; cpu.invisible=!!d.cv;
   if(guestScene!==d.sc){
     guestScene = d.sc;
     if(d.sc==='play'){ $('shopScreen').classList.add('hidden'); $('startScreen').classList.add('hidden'); scene='play'; }

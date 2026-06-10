@@ -335,6 +335,7 @@ let room = null, sendInput = null, sendState = null;
 let netGuestInput = { left:false,right:false,jump:false,down:false,dash:false,special:false };
 let guestScene = 'start';           // guest mirrors host's scene
 let netConnected = false;
+let netCode = '';
 
 /* ---- player upgrade levels (persist across matches in one session) ----
    To keep saves between visits when you host this yourself, read/write
@@ -936,8 +937,15 @@ function updateHUD(){
     `<span class="you">${scoreYou}</span><span class="dash">—</span><span class="cpu">${scoreCpu}</span>`;
   if(mode==='2p' || mode==='online'){
     $('coins').textContent = '';
-    const label = mode==='online' ? 'Online' : '2 Players';
-    $('matchLabel').textContent = `${label} · First to ${winScore}` + (padConnected ? '  🎮' : '');
+    let label;
+    if(mode==='online'){
+      label = (netRole==='host' && !netConnected)
+        ? `Online · Code ${netCode} — waiting…`
+        : `Online · First to ${winScore}`;
+    } else {
+      label = `2 Players · First to ${winScore}`;
+    }
+    $('matchLabel').textContent = label + (padConnected ? '  🎮' : '');
   } else {
     $('coins').textContent = `🪙 ${coins}`;
     $('matchLabel').textContent =
@@ -1290,6 +1298,7 @@ function startOnline(asHost, code){
   netRole = asHost ? 'host' : 'guest';
   mode = 'online';
   netConnected = false;
+  netCode = code;
   try{
     room = window._trysteroJoin({ appId:'slime-soccer-leofattal-v1' }, code);
   }catch(e){ netStatus('Could not start networking: ' + e.message); return; }
@@ -1298,27 +1307,33 @@ function startOnline(asHost, code){
   const stAction  = room.makeAction('st');
   sendInput = d => inpAction.send(d);
   sendState = d => stAction.send(d);
-  inpAction.onMessage = d => { netGuestInput = d; };   // host: receive guest's buttons
-  stAction.onMessage  = d => { applySnapshot(d); };     // guest: receive host's world state
+  // receiving data is itself proof a peer is connected (backup for onPeerJoin)
+  inpAction.onMessage = d => { netGuestInput = d; if(!netConnected) onPeerHere(); };
+  stAction.onMessage  = d => { if(!netConnected) onPeerHere(); applySnapshot(d); };
 
-  room.onPeerJoin = id => {
+  function onPeerHere(){
+    if(netConnected) return;
     netConnected = true;
-    netStatus('Connected! Starting…');
-    if(asHost) beginOnlineMatch();
-    else $('startScreen').classList.add('hidden');      // guest waits for first snapshot
-  };
-  room.onPeerLeave = id => { netStatus('Other player left.'); toMenu(); };
+    netStatus('Connected!');
+    if(asHost) newMatch();          // fresh 0–0 once a friend actually joins
+    updateHUD();
+  }
+  room.onPeerJoin  = () => onPeerHere();
+  room.onPeerLeave = () => { netStatus('Other player left.'); toMenu(); };
 
-  netStatus(asHost
-    ? `Your code is  ${code}  — share it. Waiting for a player…`
-    : `Joining ${code}…`);
+  if(asHost){
+    netStatus(`Your code is  ${code}  — share it. Waiting for a player…`);
+    beginOnlineMatch();             // host plays immediately, so it never gets stuck waiting
+  } else {
+    netStatus(`Joining ${code}… (waiting for the host's game)`);
+  }
 
   // if nobody connects in 15s, explain why
   setTimeout(()=>{
     if(netConnected || !room) return;
     netStatus(asHost
-      ? `Still waiting. Your friend must choose Online, type ${code}, and tap JOIN.`
-      : `No game found for ${code}. Make sure your friend tapped HOST first and you typed the exact code. (Some school/strict wifi can block the connection.)`);
+      ? `Code ${code}: still no one. Your friend picks Online, types ${code}, and taps JOIN.`
+      : `No game found for ${code}. Make sure the host tapped HOST first and you typed the exact code. (Some strict wifi blocks the connection.)`);
   }, 15000);
 }
 function beginOnlineMatch(){
